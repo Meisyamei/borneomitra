@@ -28,7 +28,8 @@ class DashboardData extends Equatable {
   final int totalTunggakan;          
   final int tunggakanKritis;         
   final int hampirJatuhTempo;        
-  final int jatuhTempoHariIni;       
+  final int jatuhTempoHariIni;      
+  final int jatuhTempoMingguIni; 
   final double nominalTunggakan;
   
   // Transaksi Terbaru
@@ -53,13 +54,14 @@ class DashboardData extends Equatable {
     required this.tunggakanKritis,
     required this.hampirJatuhTempo,
     required this.jatuhTempoHariIni,
+    required this.jatuhTempoMingguIni,
     required this.nominalTunggakan,
     required this.transaksiTerbaru,
   });
 
   @override
   List<Object?> get props => [
-    totalAnggota, totalSimpanan, totalPinjamanAktif, totalTunggakan
+    totalAnggota, totalSimpanan, totalPinjamanAktif, totalTunggakan, jatuhTempoMingguIni,
   ];
 }
 

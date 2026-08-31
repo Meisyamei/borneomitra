@@ -1,1 +1,0 @@
-// dibuat pas mau pindah repository

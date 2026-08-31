@@ -1,22 +1,75 @@
 import 'package:dartz/dartz.dart';
 import 'package:sqflite/sqflite.dart';
-import '../../../../core/errors/failures.dart';
-import '../../../../core/constants/app_constants.dart';
-import '../../domain/entities/pinjaman.dart';
-import '../../domain/repositories/pinjaman_repository.dart';
+import 'package:Koperasi/core/errors/failures.dart';
+import 'package:Koperasi/features/pinjaman/domain/entities/pinjaman.dart';
+import 'package:Koperasi/core/services/database_service.dart';
+import 'package:Koperasi/core/services/api_service.dart';
+import 'package:Koperasi/features/pinjaman/domain/repositories/pinjaman_repository.dart';
+import 'package:Koperasi/core/constants/app_constants.dart';
 
 class PinjamanRepositoryImpl implements PinjamanRepository {
   final Database database;
 
   PinjamanRepositoryImpl(this.database);
 
+  // ===== UPDATE STATUS PINJAMAN (HANYA DIPANGGIL SAAT STARTUP) =====
+  Future<void> updateAllPinjamanStatus() async {
+    try {
+      final db = database;
+      
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'lunas' 
+        WHERE sisa_pinjaman <= 0 AND status != 'lunas'
+      ''');
+      
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'menunggak' 
+        WHERE id IN (
+          SELECT DISTINCT pinjaman_id 
+          FROM angsuran 
+          WHERE status = 'belum_bayar' 
+            AND tanggal_jatuh_tempo < date('now')
+        ) AND status NOT IN ('lunas', 'menunggak')
+      ''');
+      
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'aktif' 
+        WHERE id NOT IN (
+          SELECT DISTINCT pinjaman_id 
+          FROM angsuran 
+          WHERE status = 'belum_bayar' 
+            AND tanggal_jatuh_tempo < date('now')
+        ) AND sisa_pinjaman > 0 AND status NOT IN ('aktif', 'lunas')
+      ''');
+      
+      print('✅ Status pinjaman updated');
+    } catch (e) {
+      print('❌ Error update status pinjaman: $e');
+    }
+  }
+
+  // ===== GET ALL PINJAMAN =====
   @override
   Future<Either<Failure, List<Pinjaman>>> getAllPinjaman() async {
     try {
-      final result = await database.query(
-        'pinjaman',
-        orderBy: 'tanggal_pinjam DESC',
-      );
+      final db = database;
+      
+      // 🔴 HAPUS update status dari sini (pindah ke startup)
+      // await updateAllPinjamanStatus();
+      
+      final result = await db.rawQuery('''
+        SELECT 
+          p.*,
+          a.nama as nama_anggota,
+          a.nik
+        FROM pinjaman p
+        LEFT JOIN anggota a ON p.anggota_id = a.id
+        WHERE a.id IS NOT NULL
+        ORDER BY p.tanggal_pinjam DESC
+      ''');
       
       final pinjamanList = result.map((map) => _mapToEntity(map)).toList();
       return Right(pinjamanList);
@@ -25,14 +78,20 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== GET PINJAMAN BY ID =====
   @override
   Future<Either<Failure, Pinjaman>> getPinjamanById(int id) async {
     try {
-      final result = await database.query(
-        'pinjaman',
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      final db = database;
+      final result = await db.rawQuery('''
+        SELECT 
+          p.*,
+          a.nama as nama_anggota,
+          a.nik
+        FROM pinjaman p
+        LEFT JOIN anggota a ON p.anggota_id = a.id
+        WHERE p.id = ? AND a.id IS NOT NULL
+      ''', [id]);
       
       if (result.isEmpty) {
         return Left(DatabaseFailure('Pinjaman tidak ditemukan'));
@@ -44,15 +103,22 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== GET PINJAMAN BY ANGGOTA =====
   @override
   Future<Either<Failure, List<Pinjaman>>> getPinjamanByAnggota(int anggotaId) async {
     try {
-      final result = await database.query(
-        'pinjaman',
-        where: 'anggota_id = ?',
-        whereArgs: [anggotaId],
-        orderBy: 'tanggal_pinjam DESC',
-      );
+      final db = database;
+
+      final result = await db.rawQuery('''
+        SELECT 
+          p.*,
+          a.nama as nama_anggota,
+          a.nik
+        FROM pinjaman p
+        LEFT JOIN anggota a ON p.anggota_id = a.id
+        WHERE p.anggota_id = ? AND a.id IS NOT NULL
+        ORDER BY p.tanggal_pinjam DESC
+      ''', [anggotaId]);
       
       final pinjamanList = result.map((map) => _mapToEntity(map)).toList();
       return Right(pinjamanList);
@@ -61,11 +127,14 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== CREATE PINJAMAN =====
   @override
   Future<Either<Failure, void>> createPinjaman(Pinjaman pinjaman) async {
     try {
-      await database.transaction((txn) async {
-        // Insert pinjaman
+      final db = database;
+
+      await db.transaction((txn) async {
+        // 1. Insert pinjaman
         final pinjamanId = await txn.insert('pinjaman', {
           'anggota_id': pinjaman.anggotaId,
           'jumlah': pinjaman.jumlah,
@@ -77,7 +146,7 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
           'sisa_pinjaman': pinjaman.jumlah,
         });
         
-        // Generate angsuran otomatis
+        // 2. Generate angsuran otomatis
         final angsuranPerBulan = pinjaman.angsuranPerBulan;
         for (int i = 1; i <= pinjaman.tenor; i++) {
           final jatuhTempo = pinjaman.tanggalPinjam.add(Duration(days: i * 30));
@@ -91,8 +160,22 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
             'status': 'belum_bayar',
           });
         }
+
+        // 3. Kirim ke server (async, tidak block)
+        // try {
+        //   await ApiService.postPinjaman({
+        //     'anggota_id': pinjaman.anggotaId,
+        //     'jumlah': pinjaman.jumlah,
+        //     'bunga': pinjaman.bunga,
+        //     'tenor': pinjaman.tenor,
+        //     'tanggal_pinjam': pinjaman.tanggalPinjam.toIso8601String().substring(0, 10),
+        //   });
+        //   print('✅ Pinjaman berhasil dikirim ke server');
+        // } catch (e) {
+        //   print('⚠️ Gagal kirim pinjaman ke server: $e');
+        // }
         
-        // Update total pinjaman anggota
+        // 4. Update total pinjaman anggota
         await txn.rawUpdate(
           'UPDATE anggota SET total_pinjaman = total_pinjaman + ? WHERE id = ?',
           [pinjaman.jumlah, pinjaman.anggotaId],
@@ -105,10 +188,12 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== UPDATE STATUS PINJAMAN =====
   @override
   Future<Either<Failure, void>> updateStatusPinjaman(int id, String status) async {
     try {
-      await database.update(
+      final db = database;
+      await db.update(
         'pinjaman',
         {'status': status},
         where: 'id = ?',
@@ -120,10 +205,14 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== UPDATE SISA PINJAMAN =====
   @override
   Future<Either<Failure, void>> updateSisaPinjaman(int id, double sisaBaru) async {
     try {
-      await database.update(
+      final db = database;
+      if (sisaBaru < 0) sisaBaru = 0;
+      
+      await db.update(
         'pinjaman',
         {'sisa_pinjaman': sisaBaru},
         where: 'id = ?',
@@ -135,17 +224,19 @@ class PinjamanRepositoryImpl implements PinjamanRepository {
     }
   }
 
+  // ===== MAP TO ENTITY =====
   Pinjaman _mapToEntity(Map<String, dynamic> map) {
     return Pinjaman(
-      id: map['id'] as int?,
-      anggotaId: map['anggota_id'] as int,
-      jumlah: (map['jumlah'] as num).toDouble(),
-      bunga: (map['bunga'] as num).toDouble(),
-      tenor: map['tenor'] as int,
-      tanggalPinjam: DateTime.parse(map['tanggal_pinjam'] as String),
-      status: map['status'] as String,
-      dendaKeterlambatan: (map['denda_keterlambatan'] as num?)?.toDouble() ?? 50000.0,
-      sisaPinjaman: (map['sisa_pinjaman'] as num?)?.toDouble() ?? 0.0,
+      id: map['id'],
+      anggotaId: map['anggota_id'],
+      jumlah: map['jumlah']?.toDouble() ?? 0,
+      bunga: map['bunga']?.toDouble() ?? 0,
+      tenor: map['tenor'],
+      tanggalPinjam: DateTime.parse(map['tanggal_pinjam']),
+      status: map['status'],
+      dendaKeterlambatan: map['denda_keterlambatan']?.toDouble() ?? 50000,
+      sisaPinjaman: map['sisa_pinjaman']?.toDouble() ?? 0,
+      namaAnggota: map['nama_anggota'] ?? 'Anggota Tidak Ditemukan',
     );
   }
 }

@@ -49,18 +49,21 @@ class PinjamanCard extends StatelessWidget {
                     child: Text(
                       pinjaman.namaAnggota,
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(statusText,
-                        style: TextStyle(color: statusColor, fontSize: 12)),
+                    child: Text(
+                      statusText,
+                      style: TextStyle(color: statusColor, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -71,8 +74,7 @@ class PinjamanCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Jumlah Pinjaman',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Text('Jumlah Pinjaman', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         Text(
                           NumberFormatter.formatRupiah(pinjaman.jumlah),
                           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -84,12 +86,10 @@ class PinjamanCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Angsuran/Bulan',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Text('Angsuran/Bulan', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         Text(
                           NumberFormatter.formatRupiah(pinjaman.angsuranPerBulan),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.orange),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
                         ),
                       ],
                     ),
@@ -103,10 +103,8 @@ class PinjamanCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Tenor',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
-                        Text('${pinjaman.tenor} Bulan',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('Tenor', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        Text('${pinjaman.tenor} Bulan', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -114,12 +112,10 @@ class PinjamanCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Sisa Pinjaman',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const Text('Sisa Pinjaman', style: TextStyle(fontSize: 12, color: Colors.grey)),
                         Text(
                           NumberFormatter.formatRupiah(pinjaman.sisaPinjaman),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: Colors.red),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                         ),
                       ],
                     ),
@@ -127,15 +123,25 @@ class PinjamanCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: pinjaman.progressPelunasan / 100,
-                backgroundColor: Colors.grey.shade200,
-                valueColor: const AlwaysStoppedAnimation(Colors.cyan),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${pinjaman.progressPelunasan.toStringAsFixed(1)}% lunas',
-                style: const TextStyle(fontSize: 10, color: Colors.grey),
+              Row(
+                children: [
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      value: pinjaman.progressPelunasan / 100,
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: AlwaysStoppedAnimation(pinjaman.progressColor),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    pinjaman.progressDisplay,  // ← PAKAI INI
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: pinjaman.progressColor,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

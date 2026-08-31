@@ -39,7 +39,6 @@ class _TambahAnggotaPageState extends State<TambahAnggotaPage> {
       alamat: _alamatController.text,
       noHp: _noHpController.text,
       tanggalDaftar: DateTime.now(),
-      // status akan otomatis 'aktif' karena default di entity
     );
     
     final result = await sl<CreateAnggota>().execute(anggota);

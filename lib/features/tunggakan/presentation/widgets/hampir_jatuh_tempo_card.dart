@@ -15,20 +15,23 @@ class HampirJatuhTempoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Tentukan status berdasarkan hari tersisa
+    // ===== PERBAIKI LOGIKA STATUS =====
     String statusLabel;
     Color statusColor;
     
     if (data.hariTersisa < 0) {
-      // Sudah lewat jatuh tempo
+      // Sudah lewat
       statusLabel = 'LEWAT ${data.hariTersisa.abs()} HARI';
       statusColor = Colors.red;
     } else if (data.hariTersisa == 0) {
       statusLabel = 'HARI INI JATUH TEMPO';
       statusColor = Colors.orange;
     } else if (data.hariTersisa == 1) {
-      statusLabel = 'BESOK JATUH TEMPO';
+      statusLabel = 'BESOK JATUH TEMPO';  // ← PERBAIKI: 1 hari = besok
       statusColor = Colors.orange.shade300;
+    } else if (data.hariTersisa == 2) {
+      statusLabel = 'LUSA JATUH TEMPO';   // ← PERBAIKI: 2 hari = lusa
+      statusColor = Colors.orange.shade200;
     } else {
       statusLabel = '${data.hariTersisa} HARI LAGI';
       statusColor = Colors.green;
@@ -36,10 +39,10 @@ class HampirJatuhTempoCard extends StatelessWidget {
     
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      color: statusColor.withOpacity(0.1),  // ← pakai statusColor lokal
+      color: statusColor.withOpacity(0.1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: statusColor, width: 1),  // ← pakai statusColor lokal
+        side: BorderSide(color: statusColor, width: 1),
       ),
       child: InkWell(
         onTap: onTap,
@@ -48,7 +51,6 @@ class HampirJatuhTempoCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Icon
               CircleAvatar(
                 backgroundColor: statusColor.withOpacity(0.2),
                 child: Icon(
@@ -57,8 +59,6 @@ class HampirJatuhTempoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              
-              // Content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,8 +82,6 @@ class HampirJatuhTempoCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
-              // Status
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
@@ -91,7 +89,7 @@ class HampirJatuhTempoCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  statusLabel,  // ← pakai statusLabel lokal
+                  statusLabel,
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,

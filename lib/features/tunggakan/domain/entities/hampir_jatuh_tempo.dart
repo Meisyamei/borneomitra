@@ -25,6 +25,7 @@ class HampirJatuhTempo extends Equatable {
   });
 
   String get statusLabel {
+    if (hariTersisa < 0) return 'LEWAT ${hariTersisa.abs()} HARI';
     if (hariTersisa <= 0) return 'LEWAT JATUH TEMPO';
     if (hariTersisa == 1) return 'BESOK JATUH TEMPO';
     if (hariTersisa == 2) return 'LUSA JATUH TEMPO';

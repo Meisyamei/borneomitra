@@ -2,6 +2,7 @@ import 'package:dartz/dartz.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/security/aes_service.dart';
+import '../../../../core/services/api_service.dart';
 import '../../domain/entities/anggota.dart';
 import '../../domain/repositories/anggota_repository.dart';
 
@@ -67,6 +68,7 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
   @override
   Future<Either<Failure, void>> createAnggota(Anggota anggota) async {
     try {
+      // ===== 1. CEK DUPLIKAT DI LOKAL =====
       final existing = await database.query(
         'anggota',
         where: 'nik = ?',
@@ -76,6 +78,7 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
         return Left(ValidationFailure('NIK ${anggota.nik} sudah terdaftar'));
       }
 
+      // ===== 2. ENKRIPSI DATA SENSITIF =====
       final encryptedData = AesService.encryptSensitiveData({
         'nik': anggota.nik,
         'nama': anggota.nama,
@@ -83,6 +86,7 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
         'no_hp': anggota.noHp,
       });
 
+      // ===== 3. SIMPAN KE SQLITE  =====
       await database.insert('anggota', {
         'nik': anggota.nik,
         'nama': anggota.nama,
@@ -92,6 +96,23 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
         'total_pinjaman': anggota.totalPinjaman,
         'status': anggota.status,
       });
+
+      // ===== 4. KIRIM KE SERVER (ONLINE) =====
+      // try {
+      //   await ApiService.postAnggota({
+      //     'nik': anggota.nik,
+      //     'nama': anggota.nama,
+      //     'alamat': anggota.alamat,
+      //     'no_hp': anggota.noHp,
+      //     'total_simpanan': anggota.totalSimpanan,
+      //     'total_pinjaman': anggota.totalPinjaman,
+      //   });
+      //   print('✅ Data berhasil disimpan ke server');
+      // } catch (e) {
+      //   print('⚠️ Gagal kirim ke server: $e');
+      //   // Tandai untuk sync nanti (opsional)
+      //   // await _markAsPending(anggota);
+      // }
 
       return const Right(unit);
     } catch (e) {
@@ -157,7 +178,10 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
   }
 
   @override
-  Future<Either<Failure, void>> updateTotalSimpanan(int anggotaId, double nominal) async {
+  Future<Either<Failure, void>> updateTotalSimpanan(
+    int anggotaId,
+    double nominal,
+  ) async {
     try {
       final result = await getAnggotaById(anggotaId);
       if (result.isLeft()) {
@@ -180,7 +204,10 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
   }
 
   @override
-  Future<Either<Failure, void>> updateTotalPinjaman(int anggotaId, double nominal) async {
+  Future<Either<Failure, void>> updateTotalPinjaman(
+    int anggotaId,
+    double nominal,
+  ) async {
     try {
       final result = await getAnggotaById(anggotaId);
       if (result.isLeft()) {
@@ -202,26 +229,25 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
     }
   }
 
-  // Tambahkan method ini di AnggotaRepositoryImpl
   Future<void> _repairCorruptedData() async {
     try {
       final result = await database.query('anggota');
-      
+
       for (var row in result) {
         final id = row['id'];
         final encryptedData = row['encrypted_data'] as String?;
-        
+
         if (encryptedData != null && encryptedData.isNotEmpty) {
           try {
             // Coba dekripsi
             AesService.decryptSensitiveData(encryptedData);
           } catch (e) {
             print('⚠️ Data corrupted untuk ID $id, akan diperbaiki...');
-            
+
             // Backup data dari column biasa
             final nik = row['nik']?.toString() ?? '';
             final nama = row['nama']?.toString() ?? '';
-            
+
             // Re-encrypt dengan benar
             final newEncrypted = AesService.encryptSensitiveData({
               'nik': nik,
@@ -229,7 +255,7 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
               'alamat': row['alamat']?.toString() ?? '',
               'no_hp': row['no_hp']?.toString() ?? '',
             });
-            
+
             // Update database
             await database.update(
               'anggota',
@@ -237,7 +263,7 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
               where: 'id = ?',
               whereArgs: [id],
             );
-            
+
             print('✅ Data untuk ID $id telah diperbaiki');
           }
         }
@@ -250,13 +276,11 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
   Anggota _mapToEntity(Map<String, dynamic> map) {
     // Cek apakah ada encrypted_data
     final encryptedData = map['encrypted_data'] as String?;
-    
+
     if (encryptedData != null && encryptedData.isNotEmpty) {
       try {
-        // Coba dekripsi
         final decrypted = AesService.decryptSensitiveData(encryptedData);
-        
-        // Cek apakah hasil dekripsi adalah Map yang valid
+
         if (decrypted is Map<String, dynamic>) {
           return Anggota(
             id: map['id'],
@@ -264,27 +288,28 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
             nama: decrypted['nama']?.toString() ?? '',
             alamat: decrypted['alamat']?.toString() ?? '',
             noHp: decrypted['no_hp']?.toString() ?? '',
-            tanggalDaftar: map['tanggal_daftar'] != null 
-                ? DateTime.parse(map['tanggal_daftar'].toString()) 
+            tanggalDaftar: map['tanggal_daftar'] != null
+                ? DateTime.parse(map['tanggal_daftar'].toString())
                 : DateTime.now(),
             totalSimpanan: (map['total_simpanan'] as num?)?.toDouble() ?? 0,
             totalPinjaman: (map['total_pinjaman'] as num?)?.toDouble() ?? 0,
             status: map['status']?.toString() ?? 'aktif',
           );
         }
-      } catch (e) {
-        // Jika dekripsi gagal, coba baca data dari column lain
-        print('⚠️ Gagal mendekripsi data untuk ID ${map['id']}: $e');
-        
-        // Fallback: baca dari column biasa
+      } catch (e, stack) {
+        print("==========================");
+        print("AES GAGAL");
+        print(e);
+        print(stack);
+
         return Anggota(
           id: map['id'],
           nik: map['nik']?.toString() ?? '',
           nama: map['nama']?.toString() ?? '',
           alamat: map['alamat']?.toString() ?? '',
           noHp: map['no_hp']?.toString() ?? '',
-          tanggalDaftar: map['tanggal_daftar'] != null 
-              ? DateTime.parse(map['tanggal_daftar'].toString()) 
+          tanggalDaftar: map['tanggal_daftar'] != null
+              ? DateTime.parse(map['tanggal_daftar'].toString())
               : DateTime.now(),
           totalSimpanan: (map['total_simpanan'] as num?)?.toDouble() ?? 0,
           totalPinjaman: (map['total_pinjaman'] as num?)?.toDouble() ?? 0,
@@ -292,16 +317,15 @@ class AnggotaRepositoryImpl implements AnggotaRepository {
         );
       }
     }
-    
-    // Jika tidak ada encrypted_data, baca dari column biasa
+
     return Anggota(
       id: map['id'],
       nik: map['nik']?.toString() ?? '',
       nama: map['nama']?.toString() ?? '',
       alamat: map['alamat']?.toString() ?? '',
       noHp: map['no_hp']?.toString() ?? '',
-      tanggalDaftar: map['tanggal_daftar'] != null 
-          ? DateTime.parse(map['tanggal_daftar'].toString()) 
+      tanggalDaftar: map['tanggal_daftar'] != null
+          ? DateTime.parse(map['tanggal_daftar'].toString())
           : DateTime.now(),
       totalSimpanan: (map['total_simpanan'] as num?)?.toDouble() ?? 0,
       totalPinjaman: (map['total_pinjaman'] as num?)?.toDouble() ?? 0,

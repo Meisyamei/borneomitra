@@ -20,15 +20,13 @@ class _TambahSimpananPageState extends State<TambahSimpananPage> {
 
   List<Anggota> _anggotaList = [];
   Anggota? _selectedAnggota;
-  String _selectedJenis = 'wajib';
+  String _selectedJenis = 'sukarela';
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = false;
   bool _isLoadingAnggota = true;
 
   final List<Map<String, dynamic>> _jenisOptions = [
-    {'value': 'wajib', 'label': 'Simpanan Wajib', 'min': 50000},
     {'value': 'sukarela', 'label': 'Simpanan Sukarela', 'min': 10000},
-    {'value': 'pokok', 'label': 'Simpanan Pokok', 'min': 100000},
   ];
 
   @override
@@ -72,6 +70,7 @@ class _TambahSimpananPageState extends State<TambahSimpananPage> {
     final simpanan = Simpanan(
       anggotaId: _selectedAnggota!.id!,
       jenis: _selectedJenis,
+      tipe: 'masuk',
       nominal: double.parse(_nominalController.text),
       tanggal: _selectedDate,
       keterangan: _keteranganController.text.isEmpty ? null : _keteranganController.text,

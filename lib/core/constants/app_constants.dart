@@ -10,7 +10,7 @@ class AppConstants {
 
   // Database
   static const String dbName = 'bms_koperasi.db';
-  static const int dbVersion = 2;
+  static const int dbVersion = 6;
   
   // SharedPreferences Keys
   static const String tokenKey = 'auth_token';

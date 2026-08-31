@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'core/security/aes_service.dart';
 import 'core/services/database_service.dart';
 import 'core/services/connectivity_service.dart';
+import 'package:Koperasi/features/simpanan/domain/usecases/tarik_simpanan.dart';
 
 // Auth
 import 'features/auth/domain/repositories/auth_repository.dart';
@@ -12,6 +13,8 @@ import 'features/auth/domain/usecases/logout_usecase.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/data/datasources/auth_local_datasource.dart';
 import 'features/auth/presentation/bloc/login_bloc.dart';
+import 'features/auth/domain/usecases/change_password_usecase.dart';
+import 'features/auth/domain/usecases/change_username_usecase.dart';
 
 // Anggota
 import 'features/anggota/domain/repositories/anggota_repository.dart';
@@ -51,12 +54,14 @@ import 'package:Koperasi/features/simpanan/domain/usecases/get_total_simpanan_pe
 import 'package:Koperasi/features/simpanan/domain/usecases/get_simpanan_by_periode.dart';
 import 'package:Koperasi/features/simpanan/data/repositories/simpanan_repository_impl.dart';
 
+
 //laporan
 import 'package:Koperasi/features/laporan/domain/repositories/laporan_repository.dart';
 import 'package:Koperasi/features/laporan/domain/usecases/get_laporan_harian.dart';
 import 'package:Koperasi/features/laporan/domain/usecases/get_laporan_bulanan.dart';
 import 'package:Koperasi/features/laporan/domain/usecases/get_laporan_tahunan.dart';
 import 'package:Koperasi/features/laporan/domain/usecases/export_laporan_pdf.dart';
+import 'package:Koperasi/features/laporan/domain/usecases/get_laporan_tahunan_detail.dart';
 import 'package:Koperasi/features/laporan/data/repositories/laporan_repository_impl.dart';
 
 //tunggakan
@@ -165,7 +170,7 @@ Future<void> init() async {
   // Angsuran
   try {
     sl.registerLazySingleton<AngsuranRepository>(
-      () => AngsuranRepositoryImpl(sl<Database>()),
+      () => AngsuranRepositoryImpl(sl<DatabaseService>()),
     );
     sl.registerLazySingleton(() => GetAngsuranByPinjaman(sl()));
     sl.registerLazySingleton(() => BayarAngsuran(sl()));
@@ -202,9 +207,9 @@ Future<void> init() async {
     sl.registerLazySingleton(() => GetSimpananByAnggota(sl()));
     sl.registerLazySingleton(() => CreateSimpanan(sl()));
     sl.registerLazySingleton(() => GetTotalSimpanan(sl()));
-    sl.registerLazySingleton(() => GetTotalSimpananByAnggota(sl()));
-    sl.registerLazySingleton(() => GetTotalSimpananPerJenis(sl()));
+    // sl.registerLazySingleton(() => GetTotalSimpananPerJenis(sl()));
     sl.registerLazySingleton(() => GetSimpananByPeriode(sl()));
+    sl.registerLazySingleton(() => TarikSimpanan(sl()));
     print('🔵 12. Simpanan registered');
   } catch (e) {
     print('❌ Simpanan error: $e');
@@ -215,6 +220,7 @@ Future<void> init() async {
     sl.registerLazySingleton<LaporanRepository>(
       () => LaporanRepositoryImpl(sl<DatabaseService>()),
     );
+    sl.registerLazySingleton(() => GetLaporanTahunanDetail(sl()));
     sl.registerLazySingleton(() => GetLaporanHarian(sl()));
     sl.registerLazySingleton(() => GetLaporanBulanan(sl()));
     sl.registerLazySingleton(() => GetLaporanTahunan(sl()));
@@ -249,7 +255,10 @@ Future<void> init() async {
   } catch (e) {
     print('❌ Dashboard error: $e');
   }
-  
+  // CHANGE PASSWORD & USERNAME 
+  sl.registerLazySingleton(() => ChangePasswordUseCase(sl()));
+  sl.registerLazySingleton(() => ChangeUsernameUseCase(sl()));
+    
   print('🟢 INIT COMPLETED!');
 }
   

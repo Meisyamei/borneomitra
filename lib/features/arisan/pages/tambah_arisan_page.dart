@@ -14,9 +14,12 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
   final _formKey = GlobalKey<FormState>();
   final _namaController = TextEditingController();
   final _iuranController = TextEditingController();
+  final _biayaAdminController = TextEditingController(text: '20');  // ← TAMBAHKAN
+  final _totalBulanController = TextEditingController();
 
   DateTime _tanggalMulai = DateTime.now();
   bool _isLoading = false;
+  bool _isPersen = true;  // true = persen, false = nominal
 
   final ArisanService _arisanService = ArisanService();
 
@@ -24,6 +27,7 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
   void dispose() {
     _namaController.dispose();
     _iuranController.dispose();
+    _biayaAdminController.dispose();
     super.dispose();
   }
 
@@ -32,9 +36,23 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
 
     setState(() => _isLoading = true);
 
+    double biayaAdmin = 0;
+    final iuran = double.parse(_iuranController.text);
+    final totalBulan = int.parse(_totalBulanController.text);
+    if (_isPersen) {
+      // Hitung dari persen
+      final persen = double.parse(_biayaAdminController.text) / 100;
+      biayaAdmin = iuran * persen;
+    } else {
+      // Nominal tetap
+      biayaAdmin = double.parse(_biayaAdminController.text);
+    }
+
     final arisan = ArisanModel(
       nama: _namaController.text,
-      iuran: double.parse(_iuranController.text),
+      iuran: iuran,
+      biayaAdmin: biayaAdmin,
+      totalBulan: totalBulan,  
       tanggalMulai: _tanggalMulai,
       status: 'aktif',
     );
@@ -73,7 +91,27 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 30),
-
+            // durasi arisan
+            TextFormField(
+              controller: _totalBulanController,
+              decoration: const InputDecoration(
+                labelText: 'Durasi Arisan (Bulan)',
+                prefixIcon: Icon(Icons.calendar_month),
+                border: OutlineInputBorder(),
+                hintText: 'Contoh: 5',
+              ),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Durasi tidak boleh kosong';
+                }
+                final bulan = int.tryParse(value);
+                if (bulan == null || bulan < 2) {
+                  return 'Minimal 2 bulan';
+                }
+                return null;
+              },
+            ),
             // Nama Arisan
             TextFormField(
               controller: _namaController,
@@ -94,12 +132,11 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
             // Iuran
             TextFormField(
               controller: _iuranController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'Iuran per Peserta',
                 prefixIcon: Icon(Icons.money),
                 border: OutlineInputBorder(),
-                hintText: 'Contoh: 50000: ${NumberFormatter.formatNumber(50000)}',
-                helperText: 'Contoh format: ${NumberFormatter.formatNumber(50000)}',
+                hintText: 'Contoh: 50000',
               ),
               keyboardType: TextInputType.number,
               validator: (value) {
@@ -113,6 +150,70 @@ class _TambahArisanPageState extends State<TambahArisanPage> {
                 return null;
               },
             ),
+            const SizedBox(height: 16),
+
+            //biaya admin
+            const Text(
+              'Biaya Admin',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                // Toggle persen / nominal
+                Expanded(
+                  flex: 2,
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: true, label: Text('%')),
+                      ButtonSegment(value: false, label: Text('Rp')),
+                    ],
+                    selected: {_isPersen},
+                    onSelectionChanged: (Set<bool> newSelection) {
+                      setState(() {
+                        _isPersen = newSelection.first;
+                        _biayaAdminController.clear();
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _biayaAdminController,
+                    decoration: InputDecoration(
+                      hintText: _isPersen ? 'Masukkan persen (contoh: 20)' : 'Masukkan nominal',
+                      border: const OutlineInputBorder(),
+                      prefixText: _isPersen ? '' : 'Rp ',
+                      suffixText: _isPersen ? '%' : '',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Biaya admin tidak boleh kosong';
+                      }
+                      final val = double.tryParse(value);
+                      if (val == null || val < 0) {
+                        return 'Masukkan angka yang valid';
+                      }
+                      if (_isPersen && val > 100) {
+                        return 'Persen tidak boleh lebih dari 100%';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            if (_isPersen)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '* Biaya admin akan dihitung dari persen x iuran',
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                ),
+              ),
             const SizedBox(height: 16),
 
             // Tanggal Mulai

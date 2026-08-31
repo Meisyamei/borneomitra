@@ -1,0 +1,24 @@
+# ~/koperasi/backend/src/api/.htaccess
+# Khusus untuk folder api
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # Redirect semua request ke index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+    Header set Access-Control-Max-Age "86400"
+</IfModule>
+
+# Larang akses langsung ke file PHP (kecuali index.php)
+<FilesMatch "^(?!index\.php$).*\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

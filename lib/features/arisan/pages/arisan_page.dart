@@ -1,3 +1,5 @@
+import 'package:Koperasi/features/arisan/models/peserta_arisan_model.dart';
+import 'package:Koperasi/features/arisan/pages/detail_arisan_page.dart';
 import 'package:flutter/material.dart';
 import 'package:Koperasi/core/utils/number_formatter.dart';
 import 'package:Koperasi/core/utils/date_formatter.dart';
@@ -22,6 +24,12 @@ class _ArisanPageState extends State<ArisanPage> {
     super.initState();
     _loadArisan();
   }
+
+  // 🔴 HAPUS SEMUA METHOD INI (sudah pindah ke service):
+  // - getPesertaWithPayment
+  // - bayarArisanPerBulan
+  // - cekBayarBulan
+  // - nextBulan
 
   Future<void> _loadArisan() async {
     setState(() => _isLoading = true);
@@ -130,7 +138,12 @@ class _ArisanPageState extends State<ArisanPage> {
                           ],
                         ),
                         onTap: () {
-                          // TODO: Lihat detail arisan dan peserta
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DetailArisanPage(arisan: arisan),
+                            ),
+                          );
                         },
                       ),
                     );

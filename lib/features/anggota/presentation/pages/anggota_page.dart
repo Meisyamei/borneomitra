@@ -1,11 +1,15 @@
-import 'package:flutter/material.dart';
-import 'package:Koperasi/core/services/database_service.dart';  // ← TAMBAHKAN INI
-import '../../domain/entities/anggota.dart';
-import '../../domain/usecases/get_all_anggota.dart';
-import '../../domain/usecases/delete_anggota.dart';
-import 'package:Koperasi/features/anggota/domain/usecases/search_anggota.dart';
+
 import 'tambah_anggota_page.dart';
 import 'detail_anggota_page.dart';
+import 'package:flutter/material.dart';  
+import '../../domain/entities/anggota.dart';
+import '../../domain/usecases/delete_anggota.dart';
+import '../../../../core/services/api_service.dart';
+import '../../domain/usecases/get_all_anggota.dart';
+import 'package:Koperasi/core/security/aes_service.dart';
+import 'package:Koperasi/core/services/database_service.dart';
+import 'package:Koperasi/features/anggota/domain/usecases/search_anggota.dart';
+
 import '../../../../core/utils/number_formatter.dart';
 import '../../../../injection_container.dart';
 
@@ -50,15 +54,34 @@ class _AnggotaPageState extends State<AnggotaPage> {
   Future<void> _debugCheckDatabase() async {
     try {
       final db = await _dbService.database;
-      final allData = await db.query('anggota');
-      print('📊 ===== CEK DATABASE ANGGOTA =====');
-      print('📊 Total data di database: ${allData.length}');
-      for (var row in allData) {
-        print('📊 ID: ${row['id']}, Nama: ${row['nama']}, NIK: ${row['nik']}');
+      
+      // Ambil semua data anggota
+      final result = await db.query('anggota');
+      
+      print('📊 ===== DATA MENTAH DI DATABASE =====');
+      print('📊 Total data: ${result.length}');
+      
+      for (var row in result) {
+        print('📊 ID: ${row['id']}');
+        print('📊   NIK: ${row['nik']}');
+        print('📊   Nama: ${row['nama']}');
+        final encryptedValue = row['encrypted_data'];
+        print('📊   encrypted_data: ${encryptedValue?.toString().substring(0, 50)}...');
+        
+        // Coba dekripsi manual
+        if (encryptedValue != null) {
+          try {
+            final encStr = encryptedValue is String ? encryptedValue : encryptedValue.toString();
+            final decrypted = AesService.decryptSensitiveData(encStr);
+            print('📊   ✅ Hasil dekripsi: $decrypted');
+          } catch (e) {
+            print('📊   ❌ Gagal dekripsi: $e');
+          }
+        }
       }
-      print('📊 ===== END CEK DATABASE =====');
+      print('📊 ===== END DEBUG =====');
     } catch (e) {
-      print('❌ Error cek database: $e');
+      print('❌ Error debug: $e');
     }
   }
 
@@ -103,7 +126,6 @@ class _AnggotaPageState extends State<AnggotaPage> {
   Future<void> _loadAnggota() async {
     setState(() => _isLoading = true);
     
-    // ← TAMBAHAN: Debug cek database sebelum load
     await _debugCheckDatabase();
     
     final result = await sl<GetAllAnggota>().execute();
@@ -188,6 +210,29 @@ class _AnggotaPageState extends State<AnggotaPage> {
             onPressed: _loadAnggota,
             tooltip: 'Refresh',
           ),
+          // Tambahkan di AppBar actions:
+          // IconButton(
+          //   icon: const Icon(Icons.cloud_upload),
+          //   onPressed: () async {
+          //     try {
+          //       final response = await ApiService.postAnggota({
+          //         'nik': '9999999999999999',
+          //         'nama': 'Test dari Flutter',
+          //         'alamat': 'Jl. Test',
+          //         'no_hp': '081234567890',
+          //       });
+          //       print('✅ Response: $response');
+          //       ScaffoldMessenger.of(context).showSnackBar(
+          //         const SnackBar(content: Text('Koneksi ke server berhasil!'), backgroundColor: Colors.green),
+          //       );
+          //     } catch (e) {
+          //       print('❌ Error: $e');
+          //       ScaffoldMessenger.of(context).showSnackBar(
+          //         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          //       );
+          //     }
+          //   },
+          // ),
         ],
       ),
       body: Column(

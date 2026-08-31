@@ -4,6 +4,7 @@ import '../../domain/usecases/update_anggota.dart';
 import '../../../../core/utils/number_formatter.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../injection_container.dart';
+import '../../../simpanan/presentation/pages/tarik_simpanan_page.dart';  // ← TAMBAHKAN
 
 class DetailAnggotaPage extends StatefulWidget {
   final Anggota anggota;
@@ -209,19 +210,178 @@ class _DetailAnggotaPageState extends State<DetailAnggotaPage> {
           ),
           const SizedBox(height: 16),
           
-          // Action Buttons
-          if (!_anggota.isAktif)
-            ElevatedButton.icon(
-              onPressed: () {
-                // Reactivate member
-              },
-              icon: const Icon(Icons.refresh),
-              label: const Text('Aktivasi Kembali'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          // ============ ACTION BUTTONS ============
+          // ← TARUH DI SINI
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Text(
+                    'Aksi',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // Tombol Tarik Simpanan
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _anggota.totalSimpanan > 0
+                              ? () async {
+                                  final result = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => TarikSimpananPage(
+                                        anggota: _anggota,
+                                        saldoSekarang: _anggota.totalSimpanan,
+                                      ),
+                                    ),
+                                  );
+                                  if (result == true) {
+                                    // Refresh data (reload dari database)
+                                    setState(() {});
+                                  }
+                                }
+                              : null, // Disable jika saldo 0
+                          icon: const Icon(Icons.money_off),
+                          label: const Text('Tarik Simpanan'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // Tombol Lihat Riwayat Simpanan
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            // Navigasi ke riwayat simpanan anggota
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => SimpananAnggotaPage(
+                                  anggotaId: _anggota.id!,
+                                  namaAnggota: _anggota.nama,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.history),
+                          label: const Text('Riwayat Simpanan'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // Tombol Lihat Riwayat Pinjaman
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            // Navigasi ke riwayat pinjaman anggota
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PinjamanAnggotaPage(
+                                  anggotaId: _anggota.id!,
+                                  namaAnggota: _anggota.nama,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.credit_card),
+                          label: const Text('Riwayat Pinjaman'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Aktivasi Kembali (jika non-aktif)
+                  if (!_anggota.isAktif) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              // Reactivate member
+                              _aktivasiKembali();
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Aktivasi Kembali'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
             ),
+          ),
+          // ============ END ACTION BUTTONS ============
+          
         ],
       ),
     );
+  }
+  
+  // ← TAMBAHKAN METHOD UNTUK AKTIVASI
+  Future<void> _aktivasiKembali() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Aktivasi Anggota'),
+        content: Text('Apakah Anda yakin ingin mengaktifkan kembali anggota "${_anggota.nama}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Aktivasi'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirm == true) {
+      setState(() => _isLoading = true);
+      
+      final updatedAnggota = _anggota.copyWith(status: 'aktif');
+      final result = await sl<UpdateAnggota>().execute(updatedAnggota);
+      
+      setState(() => _isLoading = false);
+      
+      result.fold(
+        (failure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal aktivasi: ${failure.message}'), backgroundColor: Colors.red),
+          );
+        },
+        (_) {
+          setState(() {
+            _anggota = updatedAnggota;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Anggota berhasil diaktifkan'), backgroundColor: Colors.green),
+          );
+        },
+      );
+    }
   }
   
   Widget _buildEditForm() {
@@ -334,6 +494,73 @@ class _DetailAnggotaPageState extends State<DetailAnggotaPage> {
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
       ],
+    );
+  }
+}
+
+// ============ TEMPORARY DUMMY PAGES ============
+// TODO: Buat halaman riwayat simpanan dan pinjaman
+
+class SimpananAnggotaPage extends StatelessWidget {
+  final int anggotaId;
+  final String namaAnggota;
+
+  const SimpananAnggotaPage({
+    super.key,
+    required this.anggotaId,
+    required this.namaAnggota,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Riwayat Simpanan - $namaAnggota'),
+        backgroundColor: Colors.green,
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.savings, size: 64, color: Colors.green),
+            SizedBox(height: 16),
+            Text('Riwayat Simpanan'),
+            Text('Fitur sedang dalam pengembangan'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class PinjamanAnggotaPage extends StatelessWidget {
+  final int anggotaId;
+  final String namaAnggota;
+
+  const PinjamanAnggotaPage({
+    super.key,
+    required this.anggotaId,
+    required this.namaAnggota,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Riwayat Pinjaman - $namaAnggota'),
+        backgroundColor: Colors.orange,
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.credit_card, size: 64, color: Colors.orange),
+            SizedBox(height: 16),
+            Text('Riwayat Pinjaman'),
+            Text('Fitur sedang dalam pengembangan'),
+          ],
+        ),
+      ),
     );
   }
 }

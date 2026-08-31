@@ -17,7 +17,37 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
   Future<Either<Failure, List<Tunggakan>>> getAllTunggakan() async {
     try {
       final db = await _db;
+      
+      // Update status pinjaman
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'lunas' 
+        WHERE sisa_pinjaman <= 0 AND status != 'lunas'
+      ''');
+      
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'menunggak' 
+        WHERE id IN (
+          SELECT DISTINCT pinjaman_id 
+          FROM angsuran 
+          WHERE status = 'belum_bayar' 
+            AND tanggal_jatuh_tempo < date('now')
+        ) AND status NOT IN ('lunas', 'menunggak')
+      ''');
+      
+      await db.rawQuery('''
+        UPDATE pinjaman 
+        SET status = 'aktif' 
+        WHERE id NOT IN (
+          SELECT DISTINCT pinjaman_id 
+          FROM angsuran 
+          WHERE status = 'belum_bayar' 
+            AND tanggal_jatuh_tempo < date('now')
+        ) AND sisa_pinjaman > 0 AND status NOT IN ('aktif', 'lunas')
+      ''');
 
+      // ===== PERBAIKI: TAMPILKAN PER PINJAMAN, BUKAN PER ANGGOTA =====
       final result = await db.rawQuery('''
         SELECT 
           a.id as anggota_id,
@@ -33,10 +63,9 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
         FROM anggota a
         JOIN pinjaman p ON a.id = p.anggota_id
         JOIN angsuran ang ON p.id = ang.pinjaman_id
-        WHERE p.status = 'aktif'
-        GROUP BY a.id
-        HAVING jumlah_bulan_tunggakan > 0
-        ORDER BY jumlah_bulan_tunggakan DESC, total_tunggakan DESC
+        WHERE p.status = 'menunggak'
+        GROUP BY a.id, p.id   -- ← GROUP BY ANGGOTA DAN PINJAMAN
+        ORDER BY a.nama ASC, jumlah_bulan_tunggakan DESC
       ''');
 
       print('✅ Query getAllTunggakan berhasil: ${result.length} data');
@@ -82,8 +111,8 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
         FROM anggota a
         JOIN pinjaman p ON a.id = p.anggota_id
         JOIN angsuran ang ON p.id = ang.pinjaman_id
-        WHERE p.status = 'aktif' AND a.id = ?
-        GROUP BY a.id
+        WHERE p.status = 'menunggak' AND a.id = ?
+        GROUP BY a.id, p.id
       ''',
         [anggotaId],
       );
@@ -117,8 +146,8 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
         FROM anggota a
         JOIN pinjaman p ON a.id = p.anggota_id
         JOIN angsuran ang ON p.id = ang.pinjaman_id
-        WHERE p.status = 'aktif'
-        GROUP BY a.id
+        WHERE p.status = 'menunggak'
+        GROUP BY a.id, p.id
         HAVING jumlah_bulan_tunggakan >= 3
         ORDER BY jumlah_bulan_tunggakan DESC
       ''');
@@ -136,13 +165,9 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       final db = await _db;
 
       final result = await db.rawQuery('''
-        SELECT COUNT(DISTINCT a.id) as total
-        FROM anggota a
-        JOIN pinjaman p ON a.id = p.anggota_id
-        JOIN angsuran ang ON p.id = ang.pinjaman_id
-        WHERE p.status = 'aktif'
-          AND ang.status = 'belum_bayar'
-          AND ang.tanggal_jatuh_tempo < date('now')
+        SELECT COUNT(*) as total
+        FROM pinjaman
+        WHERE status = 'menunggak'
       ''');
 
       final total = (result.first['total'] as int?) ?? 0;
@@ -161,9 +186,8 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
         SELECT COALESCE(SUM(ang.nominal), 0) as total
         FROM angsuran ang
         JOIN pinjaman p ON ang.pinjaman_id = p.id
-        WHERE p.status = 'aktif'
+        WHERE p.status = 'menunggak'
           AND ang.status = 'belum_bayar'
-          AND ang.tanggal_jatuh_tempo < date('now')
       ''');
 
       final total = (result.first['total'] as num?)?.toDouble() ?? 0;
@@ -178,7 +202,6 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
   Tunggakan _mapToEntity(Map<String, dynamic> map) {
     final jumlahBulan = (map['jumlah_bulan_tunggakan'] as int?) ?? 0;
 
-    // Ambil tanggal jatuh tempo pertama
     DateTime tanggalJatuhTempo;
     try {
       tanggalJatuhTempo = DateTime.parse(map['tanggal_jatuh_tempo_pertama']);
@@ -187,10 +210,8 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       print('⚠️ Gagal parse tanggal: ${map['tanggal_jatuh_tempo_pertama']}');
     }
 
-    // Hitung hari terlambat dari tanggal jatuh tempo pertama
     final hariTerlambat = DateTime.now().difference(tanggalJatuhTempo).inDays;
 
-    // Tentukan status berdasarkan hari terlambat
     String status;
     if (hariTerlambat >= 30) {
       status = 'kritis';
@@ -200,7 +221,6 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       status = 'ringan';
     }
 
-    // Debug print
     print(
       '📊 ${map['nama_anggota']} - Telat $hariTerlambat hari - Status: $status',
     );
@@ -222,32 +242,34 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
     );
   }
 
-  @override
+ @override
   Future<Either<Failure, List<HampirJatuhTempo>>> getHampirJatuhTempo() async {
     try {
       final db = await _db;
 
       print('🔍 Query getHampirJatuhTempo dijalankan...');
+      
+      // ===== PERBAIKI =====
       final result = await db.rawQuery('''
-      SELECT 
-        a.id as anggota_id,
-        a.nama as nama_anggota,
-        a.nik,
-        p.id as pinjaman_id,
-        ang.id as angsuran_id,
-        ang.angsuran_ke,
-        ang.nominal,
-        ang.tanggal_jatuh_tempo,
-        CAST(julianday(ang.tanggal_jatuh_tempo) - julianday('now') AS INTEGER) as hari_tersisa
-      FROM anggota a
-      JOIN pinjaman p ON a.id = p.anggota_id
-      JOIN angsuran ang ON p.id = ang.pinjaman_id
-      WHERE p.status = 'aktif'
-        AND ang.status = 'belum_bayar'
-        AND ang.tanggal_jatuh_tempo > date('now')
-        AND ang.tanggal_jatuh_tempo <= date('now', '+3 days')  
-      ORDER BY ang.tanggal_jatuh_tempo ASC
-    ''');
+        SELECT 
+          a.id as anggota_id,
+          a.nama as nama_anggota,
+          a.nik,
+          p.id as pinjaman_id,
+          ang.id as angsuran_id,
+          ang.angsuran_ke,
+          ang.nominal,
+          ang.tanggal_jatuh_tempo,
+          CAST(julianday(ang.tanggal_jatuh_tempo) - julianday('now') AS INTEGER) as hari_tersisa
+        FROM anggota a
+        JOIN pinjaman p ON a.id = p.anggota_id
+        JOIN angsuran ang ON p.id = ang.pinjaman_id
+        WHERE p.status IN ('aktif', 'menunggak')  -- ← PERBAIKI 1
+          AND ang.status = 'belum_bayar'
+          AND ang.tanggal_jatuh_tempo >= date('now')
+          AND ang.tanggal_jatuh_tempo <= date('now', '+3 days')  -- ← PERBAIKI 2
+        ORDER BY ang.tanggal_jatuh_tempo ASC
+      ''');
 
       print('✅ getHampirJatuhTempo berhasil: ${result.length} data');
 
@@ -285,6 +307,7 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       );
     }
   }
+
   @override
   Future<Either<Failure, List<HampirJatuhTempo>>> getJatuhTempo() async {
     try {
@@ -292,7 +315,7 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       
       print('🔍 Query getJatuhTempo dijalankan...');
       
-      // Ambil semua yang sudah lewat jatuh tempo (termasuk yang sudah lewat)
+      // ===== PERBAIKI =====
       final result = await db.rawQuery('''
         SELECT 
           a.id as anggota_id,
@@ -303,13 +326,13 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
           ang.angsuran_ke,
           ang.nominal,
           ang.tanggal_jatuh_tempo,
-          CAST(julianday('now') - julianday(ang.tanggal_jatuh_tempo) AS INTEGER) as hari_tersisa
+          0 as hari_tersisa  -- ← PERBAIKI 3
         FROM anggota a
         JOIN pinjaman p ON a.id = p.anggota_id
         JOIN angsuran ang ON p.id = ang.pinjaman_id
-        WHERE p.status = 'aktif'
+        WHERE p.status IN ('aktif', 'menunggak')
           AND ang.status = 'belum_bayar'
-          AND ang.tanggal_jatuh_tempo < date('now')  -- SUDAH LEWAT JATUH TEMPO
+          AND date(ang.tanggal_jatuh_tempo) = date('now')
         ORDER BY ang.tanggal_jatuh_tempo ASC
       ''');
       
@@ -335,7 +358,7 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
           angsuranKe: (map['angsuran_ke'] as num?)?.toInt() ?? 0, 
           nominal: (map['nominal'] as num?)?.toDouble() ?? 0,
           tanggalJatuhTempo: tanggalJatuhTempo,
-          hariTersisa: -hariTersisa, // Negative value untuk yang sudah lewat
+          hariTersisa: hariTersisa,  // ← PERBAIKI 4 (langsung 0)
         );
       }).toList();
       
@@ -345,4 +368,5 @@ class TunggakanRepositoryImpl implements TunggakanRepository {
       return Left(DatabaseFailure('Gagal mengambil data jatuh tempo: $e'));
     }
   }
+
 }

@@ -1,19 +1,29 @@
-import 'package:Koperasi/features/arisan/pages/arisan_page.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'package:Koperasi/features/laporan/presentation/pages/laporan_page.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:Koperasi/core/utils/number_formatter.dart';
-import 'package:Koperasi/core/utils/date_formatter.dart';
 import 'package:Koperasi/injection_container.dart';
-import 'package:Koperasi/features/dashboard/domain/entities/dashboard_data.dart';
-import 'package:Koperasi/features/dashboard/domain/usecases/get_dashboard_data.dart';
+import 'package:Koperasi/core/services/api_service.dart';
+import 'package:Koperasi/core/utils/date_formatter.dart';
+import 'package:Koperasi/core/services/sync_service.dart';
+import 'package:Koperasi/core/utils/number_formatter.dart';
+import 'package:Koperasi/core/services/database_service.dart';
+import 'package:Koperasi/features/arisan/pages/arisan_page.dart';
+import 'package:Koperasi/features/profile/domain/entities/profile.dart';
 import 'package:Koperasi/features/auth/presentation/bloc/login_bloc.dart';
 import 'package:Koperasi/features/auth/presentation/bloc/login_event.dart';
 import 'package:Koperasi/features/anggota/presentation/pages/anggota_page.dart';
+import 'package:Koperasi/features/profile/presentation/pages/profile_page.dart';
+import 'package:Koperasi/features/dashboard/domain/entities/dashboard_data.dart';
 import 'package:Koperasi/features/simpanan/presentation/pages/simpanan_page.dart';
 import 'package:Koperasi/features/pinjaman/presentation/pages/pinjaman_page.dart';
 import 'package:Koperasi/features/angsuran/presentation/pages/angsuran_page.dart';
 import 'package:Koperasi/features/tunggakan/presentation/pages/tunggakan_page.dart';
-import 'package:Koperasi/features/laporan/presentation/pages/laporan_page.dart';
+import 'package:Koperasi/features/dashboard/domain/usecases/get_dashboard_data.dart';
+import 'package:Koperasi/features/notifikasi/presentation/pages/notifikasi_page.dart';
+import 'package:Koperasi/features/profile/data/datasources/profile_local_datasource.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -24,8 +34,10 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
+  int _unreadNotifikasiCount = 0;
   DashboardData? _dashboardData;
   bool _isLoading = true;
+  Profile _profile = Profile(nama: 'Administrator', email: 'admin@bms.com');
 
   final List<Widget> _pages = [
     const DashboardContent(),
@@ -35,16 +47,111 @@ class _DashboardPageState extends State<DashboardPage> {
   ];
 
   final List<String> _titles = [
-    'Dashboard Borneo Mitra Senjaya',
-    'Manajemen Anggota',
-    'Manajemen Simpanan',
-    'Manajemen Pinjaman',
+    'Dashboard',
+    'Anggota',
+    'Simpanan',
+    'Pinjaman',
   ];
 
   @override
   void initState() {
     super.initState();
     _loadDashboardData();
+    _checkUnreadNotifikasi();
+    _loadProfile();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadProfile();
+  }
+  Future<void> _loadProfile() async {
+    try {
+      final profileSource = ProfileLocalDataSource(DatabaseService());
+      final newProfile = await profileSource.getProfile();
+      setState(() {
+        _profile = newProfile;
+      });
+      
+      print('✅ Profile loaded: ${_profile.nama}');
+    } catch (e) {
+      print('⚠️ Error load profile: $e');
+    }
+  }
+
+  // ===== TEST API CONNECTION =====
+  // Future<void> _testApiConnection() async {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Row(
+  //         children: [
+  //           SizedBox(
+  //             width: 20,
+  //             height: 20,
+  //             child: CircularProgressIndicator(strokeWidth: 2),
+  //           ),
+  //           SizedBox(width: 12),
+  //           Text('Mencoba koneksi ke server...'),
+  //         ],
+  //       ),
+  //       duration: Duration(seconds: 5),
+  //     ),
+  //   );
+
+  //   try {
+  //     // 🔴 PAKAI ApiService.baseUrl (bukan hardcode)
+  //     final response = await http.get(
+  //       Uri.parse('${ApiService.baseUrl}/anggota'),
+  //       headers: {'Content-Type': 'application/json'},
+  //     );
+
+  //     print('📡 Response status: ${response.statusCode}');
+  //     print('📡 Response body: ${response.body}');
+
+  //     if (response.statusCode == 200) {
+  //       final data = jsonDecode(response.body);
+  //       _showTestResultDialog(
+  //         success: true,
+  //         message: '✅ Koneksi ke server BERHASIL!',
+  //         detail: 'Data anggota: ${data['data']?.length ?? 0} data\n'
+  //                 'Response: ${response.body.substring(0, 200)}...',
+  //       );
+  //     } else {
+  //       _showTestResultDialog(
+  //         success: false,
+  //         message: '❌ Koneksi gagal!',
+  //         detail: 'Status: ${response.statusCode}\n'
+  //                 'Response: ${response.body}',
+  //       );
+  //     }
+  //   } catch (e) {
+  //     print('❌ Error: $e');
+  //     _showTestResultDialog(
+  //       success: false,
+  //       message: '❌ Error koneksi!',
+  //       detail: 'Error: $e\n\n'
+  //               'Pastikan:\n'
+  //               '1. Server berjalan (docker ps)\n'
+  //               '2. IP benar\n'
+  //               '3. Flutter terhubung ke jaringan yang sama',
+  //     );
+  //   }
+  // }
+
+  Future<void> _checkUnreadNotifikasi() async {
+    try {
+      final db = await DatabaseService().database;
+      final result = await db.query(
+        'notifikasi',
+        where: 'dibaca = 0 AND dihapus = 0',
+      );
+      setState(() {
+        _unreadNotifikasiCount = result.length;
+      });
+    } catch (e) {
+      print('⚠️ Error cek notifikasi: $e');
+    }
   }
 
   Future<void> _loadDashboardData() async {
@@ -59,12 +166,40 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
-    setState(() => _isLoading = false);
-  }
+  // ===== SYNC DATA =====
+  // Future<void> _syncData() async {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     const SnackBar(
+  //       content: Row(
+  //         children: [
+  //           SizedBox(
+  //             width: 20,
+  //             height: 20,
+  //             child: CircularProgressIndicator(strokeWidth: 2),
+  //           ),
+  //           SizedBox(width: 12),
+  //           Text('Menyinkronkan data...'),
+  //         ],
+  //       ),
+  //       duration: Duration(seconds: 10),
+  //     ),
+  //   );
+
+  //   try {
+  //     final syncService = SyncService(DatabaseService());
+  //     final results = await syncService.syncAllData();
+
+  //     _showSyncResultDialog(results);
+  //   } catch (e) {
+  //     print('❌ Error sync: $e');
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: Text('❌ Error sync: $e'),
+  //         backgroundColor: Colors.red,
+  //       ),
+  //     );
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -73,17 +208,63 @@ class _DashboardPageState extends State<DashboardPage> {
         title: Text(_titles[_selectedIndex]),
         centerTitle: true,
         actions: [
+          // IconButton(
+          //   icon: const Icon(Icons.cloud_download),
+          //   onPressed: _syncData,
+          //   tooltip: 'Sinkronisasi Data',
+          // ),
+          // IconButton(
+          //   icon: const Icon(Icons.cloud_upload),
+          //   onPressed: _testApiConnection,
+          //   tooltip: 'Test Koneksi ke Server',
+          // ),
           IconButton(
-            icon: const Icon(Icons.notifications),
+            icon: Stack(
+              children: [
+                const Icon(Icons.notifications),
+                if (_unreadNotifikasiCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          _unreadNotifikasiCount > 9 ? '9+' : '$_unreadNotifikasiCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             onPressed: () {
               _showNotificationDialog();
             },
           ),
           PopupMenuButton<String>(
-            onSelected: (value) {
+            onSelected: (value) async {
               if (value == 'profile') {
-                _showProfileDialog();
-              } else if (value == 'change_password') {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfilePage()),
+                );
+                if (result == true) {
+                  await _loadProfile();  // Refresh profile
+                  await _loadDashboardData();  // Refresh dashboard
+                  setState(() {});  // Force rebuild
+                }
+              }
+                 else if (value == 'change_password') {
                 _showChangePasswordDialog();
               } else if (value == 'logout') {
                 _confirmLogout();
@@ -96,7 +277,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   children: [
                     Icon(Icons.person),
                     SizedBox(width: 10),
-                    Text('Profil'),
+                    Text('Profile'),
                   ],
                 ),
               ),
@@ -169,13 +350,33 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  // ===== BUILD SYNC RESULT ROW =====
+  Widget _buildSyncResultRow(String label, int count) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(
+            '$count data',
+            style: TextStyle(
+              color: count > 0 ? Colors.green : Colors.grey,
+              fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDrawer() {
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           Container(
-            height: 180,
+            height: 200,
             decoration: const BoxDecoration(
               color: Colors.blue,
               borderRadius: BorderRadius.only(
@@ -183,27 +384,40 @@ class _DashboardPageState extends State<DashboardPage> {
                 bottomRight: Radius.circular(20),
               ),
             ),
-            child: const Center(
+            child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.account_circle,
-                    size: 64,
-                    color: Colors.white,
+                  // 🔴 FOTO PROFILE
+                  CircleAvatar(
+                    radius: 45,
+                    backgroundColor: Colors.white,
+                    backgroundImage: _profile.fotoPath != null && _profile.fotoPath!.isNotEmpty
+                        ? FileImage(File(_profile.fotoPath!))
+                        : null,
+                    child: _profile.fotoPath == null || _profile.fotoPath!.isEmpty
+                        ? Text(
+                            _profile.nama.isNotEmpty ? _profile.nama[0].toUpperCase() : 'A',
+                            style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue,
+                            ),
+                          )
+                        : null,
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text(
-                    'Administrator',
-                    style: TextStyle(
+                    _profile.nama,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
-                    'admin@bms.com',
-                    style: TextStyle(
+                    _profile.email,
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 12,
                     ),
@@ -296,6 +510,47 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _showProfileDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Profil Admin'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 🔴 FOTO PROFILE DI DIALOG
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: Colors.grey.shade200,
+            backgroundImage: _profile.fotoPath != null && _profile.fotoPath!.isNotEmpty
+                ? FileImage(File(_profile.fotoPath!))
+                : null,
+            child: _profile.fotoPath == null || _profile.fotoPath!.isEmpty
+                ? Text(
+                    _profile.nama.isNotEmpty ? _profile.nama[0].toUpperCase() : 'A',
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 16),
+          Text('Nama: ${_profile.nama}'),
+          Text('Email: ${_profile.email}'),
+          Text('Role: Super Admin'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Tutup'),
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildDrawerItem({
     required IconData icon,
     required String title,
@@ -306,6 +561,146 @@ class _DashboardPageState extends State<DashboardPage> {
       leading: Icon(icon, color: color ?? Colors.blue),
       title: Text(title),
       onTap: onTap,
+    );
+  }
+
+  void _showTestResultDialog({
+    required bool success,
+    required String message,
+    required String detail,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              success ? Icons.check_circle : Icons.error,
+              color: success ? Colors.green : Colors.red,
+            ),
+            const SizedBox(width: 8),
+            Text(success ? 'Sukses!' : 'Gagal!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message,
+                style: TextStyle(
+                  color: success ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                )),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                detail,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+          if (success)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AnggotaPage()),
+                );
+              },
+              icon: const Icon(Icons.people),
+              label: const Text('Lihat Data'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+    setState(() => _isLoading = false);
+  }
+
+  void _showSyncResultDialog(Map<String, int> results) {
+    final total = results.values.reduce((a, b) => a + b);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              total > 0 ? Icons.cloud_done : Icons.cloud_off,
+              color: total > 0 ? Colors.green : Colors.grey,
+            ),
+            const SizedBox(width: 8),
+            Text(total > 0 ? 'Sync Berhasil!' : 'Tidak Ada Data Baru'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSyncResultRow('Anggota', results['anggota'] ?? 0),
+            const Divider(),
+            _buildSyncResultRow('Simpanan', results['simpanan'] ?? 0),
+            const Divider(),
+            _buildSyncResultRow('Pinjaman', results['pinjaman'] ?? 0),
+            const Divider(),
+            _buildSyncResultRow('Angsuran', results['angsuran'] ?? 0),
+            const Divider(),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Total Data Baru',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '$total',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _loadDashboardData();
+            },
+            child: const Text('Refresh'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -323,37 +718,34 @@ class _DashboardPageState extends State<DashboardPage> {
                 Text('• ${_dashboardData!.totalTunggakan} anggota menunggak'),
               if (_dashboardData!.tunggakanKritis > 0)
                 Text('• ${_dashboardData!.tunggakanKritis} anggota tunggakan kritis'),
-              Text('• Total tunggakan: ${NumberFormatter.formatRupiah(_dashboardData!.nominalTunggakan)}'),
+              if (_dashboardData!.nominalTunggakan > 0)
+                Text('• Total tunggakan: ${NumberFormatter.formatRupiah(_dashboardData!.nominalTunggakan)}'),
+              if (_dashboardData!.hampirJatuhTempo > 0)
+                Text('• ${_dashboardData!.hampirJatuhTempo} anggota hampir jatuh tempo (1-3 hari)'),
+              if (_dashboardData!.jatuhTempoHariIni > 0)
+                Text('• ${_dashboardData!.jatuhTempoHariIni} anggota jatuh tempo hari ini'),
+              if (_dashboardData!.jatuhTempoMingguIni > 0)
+                Text('• ${_dashboardData!.jatuhTempoMingguIni} anggota jatuh tempo minggu ini (4-7 hari)'),
+              if (_dashboardData!.totalTunggakan == 0 &&
+                  _dashboardData!.hampirJatuhTempo == 0 &&
+                  _dashboardData!.jatuhTempoHariIni == 0 &&
+                  _dashboardData!.jatuhTempoMingguIni == 0)
+                const Text('• ✅ Semua angsuran berjalan lancar'),
             ],
-            const Text('• 5 anggota akan jatuh tempo minggu ini'),
+            if (_dashboardData == null) const Text('• Tidak ada notifikasi'),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tutup'),
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const NotifikasiPage()),
+              );
+            },
+            child: const Text('Lihat Semua'),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showProfileDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Profil Admin'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Username: admin'),
-            Text('Nama: Administrator'),
-            Text('Role: Super Admin'),
-            Text('Bergabung: 01 Januari 2024'),
-          ],
-        ),
-        actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Tutup'),
@@ -450,7 +842,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// Dashboard Content Widget
+// ============================================
+// DASHBOARD CONTENT
+// ============================================
 class DashboardContent extends StatefulWidget {
   const DashboardContent({super.key});
 
@@ -501,11 +895,8 @@ class _DashboardContentState extends State<DashboardContent> {
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Welcome Card
                       _buildWelcomeCard(),
                       const SizedBox(height: 20),
-
-                      // Stats Cards
                       const Text(
                         'Ringkasan Koperasi',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -523,7 +914,7 @@ class _DashboardContentState extends State<DashboardContent> {
                             title: 'Jatuh Tempo',
                             value: '${_data!.jatuhTempoHariIni} Anggota',
                             icon: Icons.today,
-                            color: const Color.fromARGB(255, 255, 2, 2),
+                            color: Colors.red,
                             change: '${_data!.hampirJatuhTempo} hampir jatuh tempo',
                           ),
                           _buildStatCard(
@@ -538,7 +929,7 @@ class _DashboardContentState extends State<DashboardContent> {
                             value: NumberFormatter.formatRupiah(_data!.totalSimpanan),
                             icon: Icons.savings,
                             color: Colors.green,
-                            change: '${NumberFormatter.formatRupiah(_data!.simpananMasukBulanIni)} bulan ini',
+                            change: 'Simpanan bulan ini',
                           ),
                           _buildStatCard(
                             title: 'Pinjaman Aktif',
@@ -551,14 +942,12 @@ class _DashboardContentState extends State<DashboardContent> {
                             title: 'Tunggakan',
                             value: '${_data!.totalTunggakan} Anggota',
                             icon: Icons.warning,
-                            color: const Color.fromARGB(255, 187, 233, 3),
+                            color: Colors.orange,
                             change: '${NumberFormatter.formatRupiah(_data!.nominalTunggakan)}',
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
-
-                      // Alert Tunggakan
                       if (_data!.totalTunggakan > 0) ...[
                         const Text(
                           'Peringatan Tunggakan',
@@ -630,8 +1019,6 @@ class _DashboardContentState extends State<DashboardContent> {
                         ),
                         const SizedBox(height: 20),
                       ],
-
-                      // Recent Transactions
                       const Text(
                         'Transaksi Terbaru',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -681,7 +1068,7 @@ class _DashboardContentState extends State<DashboardContent> {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: const Color.fromARGB(255, 163, 210, 243),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -696,14 +1083,14 @@ class _DashboardContentState extends State<DashboardContent> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Selamat Datang, Admin!',
+                    'Transaksi Koperasi BMS',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
-                    'Selamat bekerja dan mengelola koperasi',
+                    'Selamat Datang',
                     style: TextStyle(color: Colors.grey),
                   ),
                 ],

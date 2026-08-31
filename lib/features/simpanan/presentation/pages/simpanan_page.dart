@@ -5,7 +5,6 @@ import 'package:Koperasi/core/utils/date_formatter.dart';
 import 'package:Koperasi/injection_container.dart';
 import 'package:Koperasi/features/simpanan/domain/entities/simpanan.dart';
 import 'package:Koperasi/features/simpanan/domain/usecases/get_all_simpanan.dart';
-
 import 'package:Koperasi/features/simpanan/presentation/pages/tambah_simpanan_page.dart';
 
 class SimpananPage extends StatefulWidget {
@@ -23,7 +22,7 @@ class _SimpananPageState extends State<SimpananPage> {
   String _searchQuery = '';
   Map<String, double> _totalPerJenis = {};
 
-  final List<String> _jenisOptions = ['semua', 'wajib', 'sukarela', 'pokok'];
+  final List<String> _jenisOptions = ['sukarela'];
 
   @override
   void initState() {
@@ -52,10 +51,10 @@ class _SimpananPageState extends State<SimpananPage> {
   }
 
   Future<void> _loadTotalPerJenis() async {
-    final result = await sl<GetTotalSimpananPerJenis>().execute();
+    final result = await sl<GetTotalSimpanan>().execute();
     result.fold(
       (failure) => _showError('Gagal load total: ${failure.message}'),
-      (total) => setState(() => _totalPerJenis = total),
+      (total) => setState(() => _totalPerJenis = {'sukarela': total}),
     );
   }
 
@@ -81,7 +80,11 @@ class _SimpananPageState extends State<SimpananPage> {
   }
 
   double get _totalSimpanan {
-    return _filteredList.fold(0, (sum, s) => sum + s.nominal);
+    return _filteredList.fold(0.0, (sum, s) {
+      return s.tipe == 'keluar'
+          ? sum - s.nominal
+          : sum + s.nominal;
+    });
   }
 
   @override
@@ -126,36 +129,6 @@ class _SimpananPageState extends State<SimpananPage> {
               },
             ),
           ),
-          
-          // Filter Chips
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _jenisOptions.map((jenis) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(jenis == 'semua'
-                          ? 'Semua'
-                          : jenis == 'wajib'
-                              ? 'Wajib'
-                              : jenis == 'sukarela'
-                                  ? 'Sukarela'
-                                  : 'Pokok'),
-                      selected: _selectedJenis == jenis,
-                      selectedColor: Colors.blue.withOpacity(0.2),
-                      onSelected: (selected) {
-                        setState(() => _selectedJenis = jenis);
-                        _filterSimpanan();
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
 
           // Total Card
           Padding(
@@ -179,14 +152,6 @@ class _SimpananPageState extends State<SimpananPage> {
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _buildJenisTotal('Wajib', _totalPerJenis['wajib'] ?? 0, Colors.blue),
-                        _buildJenisTotal('Sukarela', _totalPerJenis['sukarela'] ?? 0, Colors.green),
-                        _buildJenisTotal('Pokok', _totalPerJenis['pokok'] ?? 0, Colors.orange),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -237,8 +202,13 @@ class _SimpananPageState extends State<SimpananPage> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
-                                    NumberFormatter.formatRupiah(simpanan.nominal),
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                    '${simpanan.tipe == 'keluar' ? '-' : '+'}${NumberFormatter.formatRupiah(simpanan.nominal)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: simpanan.tipe == 'keluar'
+                                          ? Colors.red
+                                          : Colors.green,
+                                    ),
                                   ),
                                   if (simpanan.keterangan != null)
                                     Text(

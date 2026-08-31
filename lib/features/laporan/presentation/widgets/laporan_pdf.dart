@@ -127,7 +127,7 @@ class LaporanPdf {
           
           pw.SizedBox(height: 20),
           pw.Text(
-            '* Laporan ini digenerate secara otomatis oleh sistem BMSS Koperasi',
+            '* Laporan ini digenerate secara otomatis oleh sistem',
             style: pw.TextStyle(fontSize: 8, color: PdfColors.grey),
           ),
         ],

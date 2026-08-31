@@ -1,3 +1,4 @@
+
 # Miscellaneous
 *.class
 *.log
@@ -43,3 +44,24 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+#Flutter
+build/
+.dart_tool/
+.pub-cache/
+.pub/
+*.lock
+*.iml
+*.iws
+*.ipr
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+#Android
+*.apk
+*.aab
+android/.gradle/
+android/local.properties

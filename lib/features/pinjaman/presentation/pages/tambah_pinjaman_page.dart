@@ -144,18 +144,19 @@ class _TambahPinjamanPageState extends State<TambahPinjamanPage> {
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
+          physics: const AlwaysScrollableScrollPhysics(),
           children: [
             // Header
             const Center(
               child: Icon(Icons.credit_card, size: 64, color: Colors.orange),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             const Text(
               'Form Pengajuan Pinjaman',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
 
             // Pilih Anggota
             _isLoadingAnggota
@@ -165,15 +166,21 @@ class _TambahPinjamanPageState extends State<TambahPinjamanPage> {
                       labelText: 'Pilih Anggota',
                       prefixIcon: Icon(Icons.person),
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     value: _selectedAnggota,
+                    isExpanded: true,
                     items: _anggotaList.map((anggota) {
                       return DropdownMenuItem(
                         value: anggota,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(anggota.nama),
+                            Text(
+                                anggota.nama,
+                                style: const TextStyle(fontSize: 14), // ← KECILKAN
+                                overflow: TextOverflow.ellipsis,  // ← TAMBAH
+                              ),
                             Text(
                               'Sisa limit: ${NumberFormatter.formatRupiah(anggota.sisaLimitPinjaman)}',
                               style: const TextStyle(
@@ -186,7 +193,7 @@ class _TambahPinjamanPageState extends State<TambahPinjamanPage> {
                     onChanged: (value) => setState(() => _selectedAnggota = value),
                     validator: (value) => value == null ? 'Pilih anggota' : null,
                   ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Jumlah Pinjaman
             TextFormField(
@@ -355,6 +362,7 @@ class _TambahPinjamanPageState extends State<TambahPinjamanPage> {
                 ),
               ],
             ),
+            const SizedBox(height: 30),
           ],
         ),
       ),

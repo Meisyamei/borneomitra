@@ -1,5 +1,5 @@
 name: Koperasi
-description: Aplikasi Sistem Informasi Keuangan Koperasi BMSS
+description: Aplikasi Sistem Informasi Keuangan Koperasi BMS
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,7 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  image_picker: ^1.0.7
+  permission_handler: ^11.0.1
   
   # UI
   cupertino_icons: ^1.0.8
@@ -49,3 +50,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+  - assets/images/logo.jpg

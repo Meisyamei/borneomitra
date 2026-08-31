@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';  
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/login_bloc.dart';
 import '../bloc/login_event.dart';
 import '../bloc/login_state.dart';
@@ -11,7 +11,7 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => sl<LoginBloc>(),  
+      create: (context) => sl<LoginBloc>(),
       child: const LoginScreen(),
     );
   }
@@ -77,31 +77,41 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Logo
+                          // ===== LOGO GAMBAR =====
                           Container(
-                            width: 80,
-                            height: 80,
+                            width: 120,
+                            height: 120,
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: Colors.white,
                               shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.blue.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                            child: const Icon(
-                              Icons.handshake,
-                              size: 48,
-                              color: Colors.blue,
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/logo.jpg',
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           const Text(
-                            'BMSS Koperasi',
+                            'Borneo Mezza Sanjaya',
                             style: TextStyle(
-                              fontSize: 28,
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
                               color: Colors.blue,
                             ),
                           ),
                           const Text(
-                            'Borneo Mitra Senjaya',
+                            'Masuk untuk melanjutkan',
                             style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
                           const SizedBox(height: 30),
@@ -160,13 +170,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   onPressed: state is LoginLoading
                                       ? null
                                       : () {
-                                          if (_formKey.currentState!.validate()) {
+                                          if (_formKey.currentState!
+                                              .validate()) {
                                             context.read<LoginBloc>().add(
-                                                  LoginSubmitted(
-                                                    _usernameController.text,
-                                                    _passwordController.text,
-                                                  ),
-                                                );
+                                              LoginSubmitted(
+                                                _usernameController.text,
+                                                _passwordController.text,
+                                              ),
+                                            );
                                           }
                                         },
                                   child: state is LoginLoading

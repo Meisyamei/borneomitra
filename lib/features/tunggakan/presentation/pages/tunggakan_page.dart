@@ -297,8 +297,20 @@ class _TunggakanPageState extends State<TunggakanPage> {
     );
   }
 
-  double get _totalTunggakan {
-    return _filteredList.fold(0, (sum, t) => sum + t.totalTunggakan);
+  double get _totalMenunggak {
+  // Hanya yang statusnya 'menunggak' (sudah lewat jatuh tempo)
+    return _filteredList
+        .where((t) => t.status == 'kritis' || t.status == 'sedang' || t.status == 'ringan')
+        .fold(0, (sum, t) => sum + t.totalTunggakan);
+  }
+  double get _totalJatuhTempo {
+    return _filteredJatuhTempoList
+        .fold(0, (sum, t) => sum + t.nominal);
+  }
+
+  double get _totalHampirJatuhTempo {
+    return _filteredHampirList
+        .fold(0, (sum, t) => sum + t.nominal);
   }
 
   int get _totalKritis {
@@ -451,7 +463,7 @@ class _TunggakanPageState extends State<TunggakanPage> {
                   Expanded(
                     child: _buildStatCard(
                       'Total Tunggakan',
-                      NumberFormatter.formatRupiah(_totalTunggakan),
+                      NumberFormatter.formatRupiah(_totalMenunggak),  // ← PAKAI INI
                       Icons.money_off,
                       Colors.red,
                     ),
@@ -463,6 +475,60 @@ class _TunggakanPageState extends State<TunggakanPage> {
                       '$_totalKritis anggota',
                       Icons.warning,
                       Colors.deepOrange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ===== TAMBAHKAN UNTUK TAB JATUH TEMPO =====
+          if (_currentTab == 'jatuh_tempo')
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Total Jatuh Tempo Hari Ini',
+                      NumberFormatter.formatRupiah(_totalJatuhTempo),
+                      Icons.today,
+                      Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Jumlah Angsuran',
+                      '${_filteredJatuhTempoList.length} transaksi',
+                      Icons.receipt,
+                      Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ===== TAMBAHKAN UNTUK TAB HAMPIR =====
+          if (_currentTab == 'hampir')
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Total Hampir Jatuh Tempo',
+                      NumberFormatter.formatRupiah(_totalHampirJatuhTempo),
+                      Icons.timer,
+                      Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Jumlah Angsuran',
+                      '${_filteredHampirList.length} transaksi',
+                      Icons.receipt,
+                      Colors.green,
                     ),
                   ),
                 ],
@@ -546,161 +612,258 @@ class _TunggakanPageState extends State<TunggakanPage> {
     );
   }
 
-  // ==================== BUILD LIST TUNGGAKAN ====================
   Widget _buildTunggakanList() {
-    if (_filteredList.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _errorMessage != null ? Icons.error_outline : Icons.check_circle,
-              size: 64,
-              color: _errorMessage != null ? Colors.red : Colors.green,
+  if (_filteredList.isEmpty) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _errorMessage != null ? Icons.error_outline : Icons.check_circle,
+            size: 64,
+            color: _errorMessage != null ? Colors.red : Colors.green,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _errorMessage != null 
+                ? _errorMessage!
+                : 'Tidak ada anggota yang menunggak',
+            style: const TextStyle(color: Colors.grey),
+            textAlign: TextAlign.center,
+          ),
+          if (_errorMessage == null)
+            const Text(
+              'Semua angsuran berjalan lancar 🎉',
+              style: TextStyle(color: Colors.grey),
             ),
-            const SizedBox(height: 16),
-            Text(
-              _errorMessage != null 
-                  ? _errorMessage!
-                  : 'Tidak ada anggota yang menunggak',
-              style: const TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            if (_errorMessage == null)
-              const Text(
-                'Semua angsuran berjalan lancar 🎉',
-                style: TextStyle(color: Colors.grey),
-              ),
-          ],
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _filteredList.length,
-      itemBuilder: (context, index) {
-        final tunggakan = _filteredList[index];
-        return TunggakanCard(
-          tunggakan: tunggakan,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailPinjamanPage(
-                  pinjaman: Pinjaman(
-                    id: tunggakan.pinjamanId,
-                    anggotaId: tunggakan.anggotaId,
-                    jumlah: tunggakan.jumlahPinjaman,
-                    bunga: 0,
-                    tenor: 0,
-                    tanggalPinjam: DateTime.now(),
-                    status: 'aktif',
-                    sisaPinjaman: tunggakan.sisaPinjaman,
-                    namaAnggota: tunggakan.namaAnggota,
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+        ],
+      ),
     );
   }
-
-  // ==================== BUILD LIST JATUH TEMPO HARI INI ====================
-  Widget _buildJatuhTempoList() {
-    if (_filteredJatuhTempoList.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.check_circle, size: 64, color: Colors.green),
-            SizedBox(height: 16),
-            Text('Tidak ada jatuh tempo hari ini'),
-            Text('Semua angsuran aman 🎉'),
-          ],
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _filteredJatuhTempoList.length,
-      itemBuilder: (context, index) {
-        final data = _filteredJatuhTempoList[index];
-        return HampirJatuhTempoCard(
-          data: data,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailPinjamanPage(
-                  pinjaman: Pinjaman(
-                    id: data.pinjamanId,
-                    anggotaId: data.anggotaId,
-                    jumlah: 0,
-                    bunga: 0,
-                    tenor: 0,
-                    tanggalPinjam: DateTime.now(),
-                    status: 'aktif',
-                    sisaPinjaman: 0,
-                    namaAnggota: data.namaAnggota,
-                  ),
+  
+  return ListView.builder(
+    padding: const EdgeInsets.all(8),
+    itemCount: _filteredList.length,
+    itemBuilder: (context, index) {
+      final tunggakan = _filteredList[index];
+      return TunggakanCard(
+        tunggakan: tunggakan,
+        onTap: () async {
+          // 🔴 AMBIL DATA PINJAMAN LENGKAP DARI DATABASE
+          try {
+            final dbService = DatabaseService();
+            final db = await dbService.database;
+            
+            final result = await db.query(
+              'pinjaman',
+              where: 'id = ?',
+              whereArgs: [tunggakan.pinjamanId],
+            );
+            
+            if (result.isNotEmpty) {
+              final data = result.first;
+              
+              // Buat objek Pinjaman dengan data lengkap
+                final pinjaman = Pinjaman(
+                id: data['id'] as int?,
+                anggotaId: (data['anggota_id'] as int?) ?? 0,
+                jumlah: (data['jumlah'] as num?)?.toDouble() ?? 0,
+                bunga: (data['bunga'] as num?)?.toDouble() ?? 0,
+                tenor: data['tenor'] as int? ?? 0,
+                tanggalPinjam: DateTime.parse(data['tanggal_pinjam'] as String),
+                status: data['status'] as String? ?? 'aktif',
+                dendaKeterlambatan: (data['denda_keterlambatan'] as num?)?.toDouble() ?? 50000,
+                sisaPinjaman: (data['sisa_pinjaman'] as num?)?.toDouble() ?? 0,
+                namaAnggota: tunggakan.namaAnggota,
+              );
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetailPinjamanPage(pinjaman: pinjaman),
                 ),
+              );
+            } else {
+              // Jika data tidak ditemukan, tampilkan error
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Data pinjaman tidak ditemukan'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } catch (e) {
+            print('❌ Error ambil data pinjaman: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: $e'),
+                backgroundColor: Colors.red,
               ),
             );
-          },
-        );
-      },
+          }
+        },
+      );
+    },
+  );
+}
+
+// ==================== BUILD LIST JATUH TEMPO HARI INI ====================
+Widget _buildJatuhTempoList() {
+  if (_filteredJatuhTempoList.isEmpty) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle, size: 64, color: Colors.green),
+          SizedBox(height: 16),
+          Text('Tidak ada jatuh tempo hari ini'),
+          Text('Semua angsuran aman 🎉'),
+        ],
+      ),
     );
   }
-
-  // ==================== BUILD LIST HAMPIR JATUH TEMPO ====================
-  Widget _buildHampirJatuhTempoList() {
-    if (_filteredHampirList.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.thumb_up, size: 64, color: Colors.green),
-            SizedBox(height: 16),
-            Text('Tidak ada yang hampir jatuh tempo'),
-            Text('Semua angsuran aman 🎉'),
-          ],
-        ),
-      );
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.all(8),
-      itemCount: _filteredHampirList.length,
-      itemBuilder: (context, index) {
-        final data = _filteredHampirList[index];
-        return HampirJatuhTempoCard(
-          data: data,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailPinjamanPage(
-                  pinjaman: Pinjaman(
-                    id: data.pinjamanId,
-                    anggotaId: data.anggotaId,
-                    jumlah: 0,
-                    bunga: 0,
-                    tenor: 0,
-                    tanggalPinjam: DateTime.now(),
-                    status: 'aktif',
-                    sisaPinjaman: 0,
-                    namaAnggota: data.namaAnggota,
-                  ),
+  return ListView.builder(
+    padding: const EdgeInsets.all(8),
+    itemCount: _filteredJatuhTempoList.length,
+    itemBuilder: (context, index) {
+      final data = _filteredJatuhTempoList[index];
+      return HampirJatuhTempoCard(
+        data: data,
+        onTap: () async {
+          // 🔴 AMBIL DATA PINJAMAN LENGKAP DARI DATABASE
+          try {
+            final dbService = DatabaseService();
+            final db = await dbService.database;
+            
+            final result = await db.query(
+              'pinjaman',
+              where: 'id = ?',
+              whereArgs: [data.pinjamanId],
+            );
+            
+            if (result.isNotEmpty) {
+              final pinjamanData = result.first;
+              
+              final pinjaman = Pinjaman(
+                id: pinjamanData['id'] as int?,
+                anggotaId: (pinjamanData['anggota_id'] as int?) ?? 0,
+                jumlah: (pinjamanData['jumlah'] as num?)?.toDouble() ?? 0,
+                bunga: (pinjamanData['bunga'] as num?)?.toDouble() ?? 0,
+                tenor: pinjamanData['tenor'] as int? ?? 0,
+                tanggalPinjam: DateTime.parse(pinjamanData['tanggal_pinjam'] as String),
+                status: pinjamanData['status'] as String? ?? 'aktif',
+                dendaKeterlambatan: (pinjamanData['denda_keterlambatan'] as num?)?.toDouble() ?? 50000,
+                sisaPinjaman: (pinjamanData['sisa_pinjaman'] as num?)?.toDouble() ?? 0,
+                namaAnggota: data.namaAnggota,
+              );
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetailPinjamanPage(pinjaman: pinjaman),
                 ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Data pinjaman tidak ditemukan'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } catch (e) {
+            print('❌ Error ambil data pinjaman: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: $e'),
+                backgroundColor: Colors.red,
               ),
             );
-          },
-        );
-      },
+          }
+        },
+      );
+    },
+  );
+}
+
+// ==================== BUILD LIST HAMPIR JATUH TEMPO ====================
+Widget _buildHampirJatuhTempoList() {
+  if (_filteredHampirList.isEmpty) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.thumb_up, size: 64, color: Colors.green),
+          SizedBox(height: 16),
+          Text('Tidak ada yang hampir jatuh tempo'),
+          Text('Semua angsuran aman 🎉'),
+        ],
+      ),
     );
   }
-
+  return ListView.builder(
+    padding: const EdgeInsets.all(8),
+    itemCount: _filteredHampirList.length,
+    itemBuilder: (context, index) {
+      final data = _filteredHampirList[index];
+      return HampirJatuhTempoCard(
+        data: data,
+        onTap: () async {
+          // 🔴 AMBIL DATA PINJAMAN LENGKAP DARI DATABASE
+          try {
+            final dbService = DatabaseService();
+            final db = await dbService.database;
+            
+            final result = await db.query(
+              'pinjaman',
+              where: 'id = ?',
+              whereArgs: [data.pinjamanId],
+            );
+            
+            if (result.isNotEmpty) {
+              final pinjamanData = result.first;
+              
+              final pinjaman = Pinjaman(
+                id: pinjamanData['id'] as int?,
+                anggotaId: (pinjamanData['anggota_id'] as int?) ?? 0,
+                jumlah: (pinjamanData['jumlah'] as num?)?.toDouble() ?? 0,
+                bunga: (pinjamanData['bunga'] as num?)?.toDouble() ?? 0,
+                tenor: pinjamanData['tenor'] as int? ?? 0,
+                tanggalPinjam: DateTime.parse(pinjamanData['tanggal_pinjam'] as String),
+                status: pinjamanData['status'] as String? ?? 'aktif',
+                dendaKeterlambatan: (pinjamanData['denda_keterlambatan'] as num?)?.toDouble() ?? 50000,
+                sisaPinjaman: (pinjamanData['sisa_pinjaman'] as num?)?.toDouble() ?? 0,
+                namaAnggota: data.namaAnggota,
+              );
+              
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DetailPinjamanPage(pinjaman: pinjaman),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Data pinjaman tidak ditemukan'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } catch (e) {
+            print('❌ Error ambil data pinjaman: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+      );
+    },
+  );
+}
   // ==================== STAT CARD ====================
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Card(

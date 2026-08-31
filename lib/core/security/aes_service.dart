@@ -9,16 +9,14 @@ class AesService {
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static final SharedPreferencesAsync _prefs = SharedPreferencesAsync();
   static encrypt.Key? _key;
-  static encrypt.IV? _iv;
+  
   
   static Future<void> init() async {
     _key = await _getOrCreateKey();
-    _iv = encrypt.IV.fromSecureRandom(16);
   }
   
   static Future<encrypt.Key> _getOrCreateKey() async {
     try {
-      // Coba ambil dari secure storage dulu
       final storedKey = await _storage.read(key: AppConstants.aesKeyStorage);
       if (storedKey != null) {
         return encrypt.Key.fromBase64(storedKey);
@@ -47,31 +45,83 @@ class AesService {
     return newKey;
   }
   
+  // static String encryptData(String plainText) {
+  //   final encrypter = encrypt.Encrypter(
+  //     encrypt.AES(_key!, mode: encrypt.AESMode.cbc),
+  //   );
+  //   final encrypted = encrypter.encrypt(plainText, iv: _iv!);
+  //   return encrypted.base64;
+  // }
+
   static String encryptData(String plainText) {
+    final iv = encrypt.IV.fromSecureRandom(16);
+
     final encrypter = encrypt.Encrypter(
       encrypt.AES(_key!, mode: encrypt.AESMode.cbc),
     );
-    final encrypted = encrypter.encrypt(plainText, iv: _iv!);
-    return encrypted.base64;
+
+    final encrypted = encrypter.encrypt(
+      plainText,
+      iv: iv,
+    );
+
+    return "${iv.base64}:${encrypted.base64}";
   }
   
+  // static String decryptData(String cipherText) {
+  //   final encrypter = encrypt.Encrypter(
+  //     encrypt.AES(_key!, mode: encrypt.AESMode.cbc),
+  //   );
+  //   final decrypted = encrypter.decrypt64(cipherText, iv: _iv!);
+  //   return decrypted;
+  // }
   static String decryptData(String cipherText) {
+    final parts = cipherText.split(":");
+
+    if (parts.length != 2) {
+      throw Exception("Invalid encrypted data");
+    }
+
+    final iv = encrypt.IV.fromBase64(parts[0]);
+    final cipher = parts[1];
+
     final encrypter = encrypt.Encrypter(
       encrypt.AES(_key!, mode: encrypt.AESMode.cbc),
     );
-    final decrypted = encrypter.decrypt64(cipherText, iv: _iv!);
-    return decrypted;
+
+    return encrypter.decrypt64(
+      cipher,
+      iv: iv,
+    );
   }
   
-  static String encryptSensitiveData(Map<String, dynamic> data) {
+    static String encryptSensitiveData(Map<String, dynamic> data) {
     return encryptData(jsonEncode(data));
   }
-  
+  // static Map<String, dynamic> decryptSensitiveData(String cipherText) {
+  //   final decrypted = decryptData(cipherText);
+  //   return jsonDecode(decrypted);
+  // }
+  //cari masalah aes dlu 
   static Map<String, dynamic> decryptSensitiveData(String cipherText) {
-    final decrypted = decryptData(cipherText);
-    return jsonDecode(decrypted);
+    try {
+      final decrypted = decryptData(cipherText);
+
+      print("========== HASIL AES ==========");
+      print(decrypted);
+      print("===============================");
+
+      return jsonDecode(decrypted);
+    } catch (e, stack) {
+      print("========== AES ERROR ==========");
+      print(e);
+      print(stack);
+      print("===============================");
+
+      rethrow;
+    }
   }
-  
+
   static String generateRandomKey() {
     final random = Random.secure();
     final bytes = List<int>.generate(32, (_) => random.nextInt(256));
